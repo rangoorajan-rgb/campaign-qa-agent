@@ -1,0 +1,17 @@
+# Core application
+streamlit>=1.37
+
+# Data handling
+pandas>=2.2
+
+# HTTP requests (Make/Slack webhooks)
+requests>=2.32
+
+# Environment variable management
+python-dotenv>=1.0
+
+# Google Gemini SDK
+google-genai>=1.0
+
+# Testing
+pytest>=8.0

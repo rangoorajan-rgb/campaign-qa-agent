@@ -1,0 +1,177 @@
+"""Domain models for campaign submissions and QA results.
+
+These models define the structured representations shared by the
+rule-based QA engine, the scoring logic, and downstream consumers
+(Streamlit UI, Google Sheets logging, Slack notifications). They contain
+no validation or scoring logic themselves — only data structure and the
+minimal internal consistency checks needed to keep that data trustworthy
+(e.g. a result cannot award more points than were available).
+
+The deterministic rules that will populate these models are defined in
+project_management/DECISIONS.md, Decision 002.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from enum import Enum
+
+
+class ValidationStatus(str, Enum):
+    """Outcome of a single validation check.
+
+    ``NOT_APPLICABLE`` is distinct from ``PASS``: it means the rule
+    genuinely does not apply to this campaign (e.g. a paid-only
+    requirement evaluated against a non-paid campaign), not that the
+    campaign satisfied it. Both award full points, but only ``PASS``
+    represents an evaluated, satisfied check.
+    """
+
+    PASS = "PASS"
+    WARNING = "WARNING"
+    FAIL = "FAIL"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class ValidationSeverity(str, Enum):
+    """Severity of a single validation check."""
+
+    INFO = "INFO"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
+
+
+class ValidationCategory(str, Enum):
+    """QA scoring category a validation check belongs to."""
+
+    TRACKING_UTMS = "TRACKING_UTMS"
+    REQUIRED_INFORMATION = "REQUIRED_INFORMATION"
+    URL_INTEGRITY = "URL_INTEGRITY"
+    NAMING_GOVERNANCE = "NAMING_GOVERNANCE"
+    LAUNCH_READINESS = "LAUNCH_READINESS"
+
+
+class QAStatus(str, Enum):
+    """Final launch-readiness outcome for a campaign submission."""
+
+    PASS = "PASS"
+    REVIEW = "REVIEW"
+    FAIL = "FAIL"
+
+
+@dataclass
+class CampaignSubmission:
+    """Campaign data submitted for pre-launch QA review.
+
+    Required fields have no defaults: callers must supply real values
+    rather than relying on placeholders, since a missing required field
+    is itself something the QA engine must be able to detect.
+    """
+
+    campaign_name: str
+    campaign_type: str
+    channel: str
+    objective: str
+    target_audience: str
+    landing_page_url: str
+    cta: str
+    campaign_owner: str
+    launch_date: date
+    destination_url: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    budget: float | None = None
+    campaign_message: str | None = None
+
+
+@dataclass
+class ValidationResult:
+    """Outcome of a single validation rule applied to a campaign.
+
+    ``recommendation`` is optional: a passing check has nothing to
+    recommend. ``points_earned`` cannot exceed ``points_available`` — this
+    is enforced at construction time so an inconsistent result can never
+    be created.
+    """
+
+    category: ValidationCategory
+    rule_id: str
+    status: ValidationStatus
+    severity: ValidationSeverity
+    message: str
+    points_available: float
+    points_earned: float
+    recommendation: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.points_earned > self.points_available:
+            raise ValueError(
+                f"rule '{self.rule_id}': points_earned "
+                f"({self.points_earned}) cannot exceed points_available "
+                f"({self.points_available})"
+            )
+
+
+@dataclass
+class QAResult:
+    """Overall QA outcome for a campaign submission.
+
+    ``score`` and ``status`` are computed by scoring.py and passed in
+    here — this model only stores the outcome, it does not calculate it.
+    ``critical_failures`` and the other helper properties are derived
+    from ``validation_results`` rather than stored separately, so they
+    can never drift out of sync with the underlying results.
+    """
+
+    campaign: CampaignSubmission
+    validation_results: list[ValidationResult]
+    score: float
+    status: QAStatus
+
+    @property
+    def critical_failures(self) -> list[ValidationResult]:
+        """Results that are both CRITICAL severity and a FAIL status."""
+        return [
+            result
+            for result in self.validation_results
+            if result.severity == ValidationSeverity.CRITICAL
+            and result.status == ValidationStatus.FAIL
+        ]
+
+    @property
+    def passed_checks(self) -> list[ValidationResult]:
+        """Results with a PASS status. Excludes NOT_APPLICABLE."""
+        return [
+            result
+            for result in self.validation_results
+            if result.status == ValidationStatus.PASS
+        ]
+
+    @property
+    def not_applicable_checks(self) -> list[ValidationResult]:
+        """Results with a NOT_APPLICABLE status."""
+        return [
+            result
+            for result in self.validation_results
+            if result.status == ValidationStatus.NOT_APPLICABLE
+        ]
+
+    @property
+    def warnings(self) -> list[ValidationResult]:
+        """Results with a WARNING status."""
+        return [
+            result
+            for result in self.validation_results
+            if result.status == ValidationStatus.WARNING
+        ]
+
+    @property
+    def failed_checks(self) -> list[ValidationResult]:
+        """Results with a FAIL status."""
+        return [
+            result
+            for result in self.validation_results
+            if result.status == ValidationStatus.FAIL
+        ]
