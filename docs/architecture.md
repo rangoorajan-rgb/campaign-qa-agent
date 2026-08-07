@@ -32,9 +32,10 @@ than a single monolithic application:
 - **Notification Layer** — Slack webhooks used to alert stakeholders of QA
   results and launch blockers.
 
-These components are described here at a conceptual level only. Their
-implementation is intentionally out of scope for this stage of the project
-and will be introduced incrementally, as described in
+These components are described here at a conceptual level. The QA Engine
+(deterministic validation and scoring) is implemented; the AI Analysis,
+Application, Automation, Logging, and Notification layers are not yet
+built and will be introduced incrementally, as described in
 [roadmap.md](roadmap.md).
 
 ### QA Engine Validation Model

@@ -7,9 +7,11 @@ tool designed to validate marketing campaigns before launch. It checks
 campaign metadata and tracking configuration against a set of governance
 rules, helping teams catch preventable errors before they reach production.
 
-This project is currently in early development. This repository has been
-bootstrapped as a foundation for future implementation work; no application
-logic exists yet.
+This project is currently in early development. The deterministic
+rule-based QA engine — campaign validation and scoring — is implemented
+and covered by an automated test suite. The Streamlit interface, Gemini
+qualitative analysis, and the Make/Google Sheets/Slack integrations
+described below are still planned and not yet built.
 
 ## Business Problem
 
@@ -39,20 +41,21 @@ The application is planned to evolve through the following components:
 
 - A **rule-based QA engine** that validates campaign data against defined
   governance rules (naming conventions, required fields, UTM structure,
-  URL validity)
+  URL validity) and produces a deterministic 0–100 score and PASS/REVIEW/
+  FAIL status — **implemented** (`src/validators.py`, `src/scoring.py`)
 - A **Streamlit application** providing a user interface for submitting and
-  reviewing campaign QA results
+  reviewing campaign QA results — planned, not yet built
 - **Gemini AI-assisted analysis** for more nuanced review beyond static
-  rules (e.g., naming consistency, contextual anomalies)
+  rules (e.g., naming consistency, contextual anomalies) — planned, not
+  yet built
 - **Automation via Make (Integromat)** to connect the QA process to
-  existing marketing tools and workflows
+  existing marketing tools and workflows — planned, not yet built
 - **Google Sheets logging** to maintain a persistent, shareable audit trail
-  of QA results
+  of QA results — planned, not yet built
 - **Slack notifications** to alert stakeholders of QA results and launch
-  blockers
+  blockers — planned, not yet built
 
-No architectural component beyond repository bootstrap has been implemented
-yet. See [docs/architecture.md](docs/architecture.md) for further detail and
+See [docs/architecture.md](docs/architecture.md) for further detail and
 [docs/roadmap.md](docs/roadmap.md) for the phased build plan.
 
 ## Technology Stack
@@ -89,8 +92,9 @@ for the full phased roadmap, summarized below:
 
 ## Installation
 
-> The application is not yet functional. These steps prepare a local
-> environment for development.
+> There is no user-facing application yet (no Streamlit UI). These steps
+> prepare a local environment for development and let you run the
+> deterministic QA engine's test suite.
 
 1. Clone the repository:
 
@@ -119,12 +123,17 @@ for the full phased roadmap, summarized below:
    cp .env.example .env
    ```
 
+5. Run the test suite:
+
+   ```bash
+   pytest
+   ```
+
 ## Future Roadmap
 
-Planned future work includes the rule-based QA engine, the Streamlit
-interface, Gemini-powered analysis, and integrations with Make, Google
-Sheets, and Slack. Full details are tracked in
-[docs/roadmap.md](docs/roadmap.md).
+Planned future work includes the Streamlit interface, Gemini-powered
+analysis, and integrations with Make, Google Sheets, and Slack. Full
+details are tracked in [docs/roadmap.md](docs/roadmap.md).
 
 ## License
 
