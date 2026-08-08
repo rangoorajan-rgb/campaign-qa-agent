@@ -107,12 +107,14 @@ The application is composed of the following components:
   and reviewing campaign QA results — **implemented** (`app.py`,
   `src/ui_helpers.py`)
 - **Gemini AI-assisted analysis** for more nuanced review beyond static
-  rules (e.g., naming consistency, contextual anomalies) — **in progress**
-  (Sprint 3; `src/gemini_analyzer.py`), runs automatically after the
-  deterministic QA engine as an advisory-only qualitative review; not
-  yet manually verified against a live Gemini API response
+  rules (e.g., naming consistency, contextual anomalies) — **implemented**
+  (`src/gemini_analyzer.py`), runs automatically after the deterministic
+  QA engine as an advisory-only qualitative review
 - **Automation via Make (Integromat)** to connect the QA process to
-  existing marketing tools and workflows — planned, not yet built
+  existing marketing tools and workflows — **in progress** (Sprint 4;
+  `src/webhook.py`), delivers the completed QA result to a Make scenario
+  as a side effect after QA and Gemini both complete; not yet manually
+  verified against a live Make scenario
 - **Google Sheets logging** to maintain a persistent, shareable audit trail
   of QA results — planned, not yet built
 - **Slack notifications** to alert stakeholders of QA results and launch
@@ -200,9 +202,9 @@ automated test suite, and launch the Streamlit dashboard.
 
 ## Future Roadmap
 
-Gemini-powered qualitative analysis is currently being implemented
-(Sprint 3). Planned future work beyond that includes integrations with
-Make, Google Sheets, and Slack. Full details are tracked in
+Make webhook automation is currently being implemented (Sprint 4).
+Planned future work beyond that includes Google Sheets logging and Slack
+notifications. Full details are tracked in
 [docs/roadmap.md](docs/roadmap.md).
 
 ## License

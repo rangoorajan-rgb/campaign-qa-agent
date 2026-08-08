@@ -605,3 +605,165 @@ suite makes a real network call or requires `GEMINI_API_KEY` to be set.
 Accepted
 
 ---
+
+## Decision 005
+
+### Decision ID
+
+005
+
+### Date
+
+2026-08-08
+
+### Context
+
+Sprint 4 adds a Make webhook as a third pipeline stage, after the
+deterministic QA engine (Decisions 002/003) and the Gemini qualitative
+review (Decision 004). Like Gemini, this is a side effect that must never
+be allowed to influence the deterministic result — but unlike Gemini, it
+also introduces retry behaviour and an outbound payload whose content
+needed explicit, deliberate boundaries (what's sent, what's withheld) and
+explicit event/identity semantics (event name, event ID, timestamp)
+before implementation, since a webhook payload becomes a contract with an
+external system the moment anything depends on it.
+
+### Decision
+
+**Webhook delivery is a side effect only, isolated the same way Gemini
+is.** `src/webhook.py::send_to_make(qa_result, gemini_review_result, *,
+client=None, now=None) -> WebhookDeliveryResult` reads already-computed
+results without mutating either, and is contracted to never raise — every
+outcome (success, unconfigured, or failure after retries) resolves to a
+valid `WebhookDeliveryResult`. In `app.py`, both `qa_result` and
+`gemini_review_result` are already written to `st.session_state` before
+`send_to_make()` is ever called, and the call is additionally wrapped in
+a defensive `try/except`, mirroring Decision 004's two-independent-layers
+approach exactly.
+
+**Event contract:** every delivery sends `event: "campaign.qa.completed"`,
+one `event_id` (a fresh `uuid.uuid4()`), and one `sent_at` (UTC ISO 8601,
+via an injectable `now` callable). Both `event_id` and `sent_at` are
+generated exactly once per `send_to_make()` call, *before* the retry
+loop, and reused unchanged across every HTTP attempt belonging to that
+call — they identify the logical event, not the individual delivery
+attempt. This is what makes future idempotency, audit tracing, and
+duplicate-delivery detection on the Make side possible: two attempts
+carrying the same `event_id` are unambiguously the same event, not two
+events.
+
+**Payload contents are an explicit allowlist, not a dump of available
+data.** Included: campaign context fields needed for routing/notification
+(`campaign_name`, `campaign_type`, `channel`, `objective`,
+`target_audience`, `campaign_owner`, `cta`, `launch_date`,
+`landing_page_url`, `destination_url`, `utm_source`, `utm_medium`,
+`utm_campaign`); the full deterministic QA block (`score`, `status`,
+`critical_failure_count`, `warning_count`, `critical_failures`,
+`warnings`, `category_breakdown`); and the full Gemini `ai_review` block
+(`status`, `summary`, `concerns` — full array with `title`/`severity`/
+`explanation`, `recommendation`) so Make can drive downstream actions
+(Slack, email, Notion, task creation) without a second round-trip call
+back into this application. Excluded: `budget` (financial data),
+`campaign_message` (free-text creative copy), Gemini's `strengths` (not
+decision-relevant for automation), and — as an absolute invariant, not a
+judgment call — any secret (`GEMINI_API_KEY`, `MAKE_WEBHOOK_URL`), raw
+Gemini prompt text, stack traces, or internal file paths. When
+`gemini_review_result.status` is `NOT_CONFIGURED` or `ERROR`, `ai_review`
+contains only `status` — `summary`/`concerns`/`recommendation` are
+omitted entirely, never present as `null`.
+
+**Retry policy:** up to `MAKE_WEBHOOK_MAX_ATTEMPTS` (default 2) total
+attempts, with a fixed ~1 second delay between attempts (no backoff
+library, no async — a deliberately simple, synchronous, blocking
+implementation for this sprint). Retries apply to
+`requests.exceptions.ConnectionError`, `requests.exceptions.Timeout`, and
+HTTP 5xx — all treated as potentially transient. HTTP 4xx is never
+retried — a bad URL or malformed payload will not fix itself on a second
+attempt, so it resolves to `ERROR` immediately, in one attempt.
+
+**Worst-case blocking latency is documented precisely, not
+approximated favourably:** with `MAKE_WEBHOOK_TIMEOUT_SECONDS=5` and
+`MAKE_WEBHOOK_MAX_ATTEMPTS=2`, the worst case is one 5-second timeout,
+plus a ~1 second retry delay, plus a second 5-second timeout — **approximately
+11 seconds**, not 6. Sprint 4 explicitly does not redesign this into
+async/background processing; the `st.spinner("Sending to Make...")`
+shown during this window is a UI affordance for a still-synchronous,
+still-blocking call, not a mitigation of the latency itself. A future
+sprint may need to revisit this if 11 seconds proves too slow in
+practice.
+
+**Logging distinguishes real exceptions from HTTP error responses.**
+`logger.exception(...)` (which fabricates a traceback in the log) is used
+only when a real Python exception was caught (`ConnectionError`,
+`Timeout`, or an unexpected `Exception`). HTTP 5xx responses — which are
+not exceptions, just a normal return value carrying a bad status code —
+are logged with `logger.warning(...)`. HTTP 4xx responses are logged
+with `logger.error(...)` (a real, terminal problem, but still not a
+caught exception, so no fabricated traceback). The full
+`MAKE_WEBHOOK_URL` is never logged in any code path, since Make webhook
+URLs embed a unique scenario token in the path and are therefore
+effectively a credential.
+
+**UI is intentionally minimal and status-dependent.** `NOT_CONFIGURED`
+renders nothing at all — an unconfigured webhook is a normal, expected
+state (most local development will never set `MAKE_WEBHOOK_URL`), not
+something to flag. `SENT` and `ERROR` each render one `st.caption`-weight
+line ("Sent to Make" / "Could not deliver to Make — QA result above is
+unaffected."), never a prominent box — a webhook delivery outcome is
+operationally minor and not something the marketer needs to act on.
+
+### Alternatives Considered
+
+- A fresh `event_id` per HTTP attempt (rather than per logical call) —
+  rejected: this would make it impossible for Make (or a future
+  idempotency/dedup layer) to recognise that two attempts were the same
+  underlying event, defeating the stated purpose of having an event ID
+  at all.
+- Sending only `concern_count` instead of the full Gemini `concerns`
+  array (the original proposal) — superseded by explicit approval:
+  Make needs enough detail to drive downstream actions without a second
+  API call back into this application.
+- A configurable/longer timeout with more retries — rejected in favour
+  of keeping the worst case bounded and small (~11s); if Make proves
+  frequently slow in practice, that's a signal to revisit, not a reason
+  to build more retry complexity now.
+- Async/background webhook delivery so the UI never blocks — explicitly
+  out of scope for Sprint 4 per instruction; noted as a candidate for a
+  future sprint if the ~11s worst case is a real problem in practice.
+- Showing `error_message` verbatim in the UI — rejected in favour of a
+  single fixed caption per status, matching the same pattern already
+  established for Gemini's `ERROR` rendering in `render_ai_review()`.
+
+### Reasoning
+
+Every boundary mirrors Decision 004's for the same reason: a marketer's
+trust in the deterministic score and status must not erode as more
+integrations are layered on. The event-identity design (stable
+`event_id`/`sent_at` across retries) is the one genuinely new concept
+this decision introduces beyond what Decision 004 established, and it
+exists specifically so that "Make received this webhook twice" and "Make
+received two different webhooks" remain distinguishable questions once
+downstream automation (Slack, email, task creation) starts being built
+on top of it.
+
+### Consequences
+
+Any future Slack or Google Sheets integration can reuse
+`WebhookDeliveryResult`/`WebhookDeliveryStatus` as-is (they are
+deliberately not Make-specific in name), and can reuse the same
+allowlist-payload philosophy rather than re-deriving what's safe to send.
+The ~11 second worst-case latency is now a documented, known trade-off,
+not an accidental discovery — if it needs to shrink, the explicit levers
+are `MAKE_WEBHOOK_TIMEOUT_SECONDS`, `MAKE_WEBHOOK_MAX_ATTEMPTS`, or moving
+delivery off the request path entirely (async/background), the last of
+which is an explicit non-goal for this sprint and would need its own
+decision. Test coverage for `send_to_make()` uses an injected fake client
+exclusively (`tests/test_webhook.py`); no test makes a real network call
+or requires `MAKE_WEBHOOK_URL` to be set, and retry-related tests patch
+out the real ~1s delay so the suite stays fast.
+
+### Status
+
+Accepted
+
+---

@@ -23,6 +23,8 @@ from src.models import (
     QAResult,
     QAStatus,
     ValidationResult,
+    WebhookDeliveryResult,
+    WebhookDeliveryStatus,
 )
 from src.scoring import score_campaign
 from src.ui_helpers import (
@@ -34,6 +36,7 @@ from src.ui_helpers import (
     format_points,
     group_by_category,
 )
+from src.webhook import send_to_make
 
 logger = logging.getLogger(__name__)
 
@@ -580,6 +583,24 @@ def render_ai_review(review_result: GeminiReviewResult) -> None:
     st.write(review.recommendation)
 
 
+def render_webhook_status(delivery_result: WebhookDeliveryResult) -> None:
+    """Render a small, calm delivery indicator for the Make webhook.
+
+    NOT_CONFIGURED renders nothing at all — an unconfigured webhook is a
+    normal, expected state, not something to flag. SENT/ERROR render a
+    single caption-weight line, never a prominent box: a webhook delivery
+    outcome is not something the marketer needs to act on.
+    """
+    if delivery_result.status == WebhookDeliveryStatus.NOT_CONFIGURED:
+        return
+    if delivery_result.status == WebhookDeliveryStatus.SENT:
+        st.caption("Sent to Make")
+    elif delivery_result.status == WebhookDeliveryStatus.ERROR:
+        st.caption(
+            "Could not deliver to Make — QA result above is unaffected."
+        )
+
+
 def main() -> None:
     st.set_page_config(
         page_title=APP_TITLE,
@@ -624,11 +645,30 @@ def main() -> None:
                 )
             st.session_state["gemini_review_result"] = gemini_review_result
 
+            try:
+                with st.spinner("Sending to Make..."):
+                    webhook_delivery_result = send_to_make(
+                        qa_result, gemini_review_result
+                    )
+            except Exception:
+                # send_to_make() is contracted to never raise; this is
+                # defense-in-depth only, so a bug there still can't take
+                # down the deterministic result above.
+                logger.exception("Unexpected failure while delivering webhook")
+                webhook_delivery_result = WebhookDeliveryResult(
+                    status=WebhookDeliveryStatus.ERROR,
+                    error_message="The webhook could not be delivered to Make.",
+                )
+            st.session_state["webhook_delivery_result"] = webhook_delivery_result
+
     if "qa_result" in st.session_state:
         render_results(st.session_state["qa_result"])
 
     if "gemini_review_result" in st.session_state:
         render_ai_review(st.session_state["gemini_review_result"])
+
+    if "webhook_delivery_result" in st.session_state:
+        render_webhook_status(st.session_state["webhook_delivery_result"])
 
 
 if __name__ == "__main__":

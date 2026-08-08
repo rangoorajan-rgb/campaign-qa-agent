@@ -239,3 +239,33 @@ class GeminiReviewResult:
     status: GeminiReviewStatus
     review: GeminiReview | None = None
     error_message: str | None = None
+
+
+class WebhookDeliveryStatus(str, Enum):
+    """Outcome of attempting to deliver a QA result to an outbound webhook.
+
+    Mirrors GeminiReviewStatus's shape for the same reason: distinguishing
+    NOT_CONFIGURED (expected when no webhook URL is set) from ERROR
+    (delivery was attempted and failed) lets the UI stay calm either way,
+    and lets NOT_CONFIGURED be rendered as nothing at all rather than a
+    false alarm.
+    """
+
+    SENT = "SENT"
+    NOT_CONFIGURED = "NOT_CONFIGURED"
+    ERROR = "ERROR"
+
+
+@dataclass
+class WebhookDeliveryResult:
+    """Outcome of calling src.webhook.send_to_make().
+
+    Deliberately generic (not Make-specific in name) since a future Slack
+    webhook can reuse this same result shape rather than a near-duplicate
+    type. Always a valid, fully-formed object regardless of what happened
+    internally, so callers never need to catch exceptions themselves.
+    """
+
+    status: WebhookDeliveryStatus
+    http_status_code: int | None = None
+    error_message: str | None = None
