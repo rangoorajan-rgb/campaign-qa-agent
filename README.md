@@ -2,18 +2,76 @@
 
 ## Overview
 
-The Campaign QA & Launch Governance Agent is an internal Marketing Operations
-tool designed to validate marketing campaigns before launch. It checks
-campaign metadata and tracking configuration against a set of governance
-rules, helping teams catch preventable errors before they reach production.
+Marketing teams frequently launch campaigns with preventable errors —
+broken UTM parameters, invalid tracking URLs, inconsistent naming, or
+missing governance information — that go unnoticed until after launch,
+by which point attribution and reporting are already compromised. The
+Campaign QA & Launch Governance Agent is an internal Marketing
+Operations tool that runs a structured, deterministic pre-launch quality
+check across campaign setup, tracking, naming, and launch readiness,
+producing a governance score and a clear PASS/REVIEW/FAIL outcome before
+a campaign goes live. It is used by Marketing Operations Managers,
+Campaign Managers, and Performance Marketing teams who need a fast,
+consistent way to catch these issues before they reach production.
 
-This project is currently in early development. The deterministic
-rule-based QA engine — campaign validation and scoring — is implemented
-and covered by an automated test suite. A Streamlit submission interface
-is under active development (Sprint 2) on top of that engine; it has not
-yet been manually verified in a browser, so it should not be considered
-complete. Gemini qualitative analysis and the Make/Google Sheets/Slack
-integrations described below are still planned and not yet built.
+## Current Project Status
+
+## Completed
+
+- Repository setup
+- Deterministic QA engine
+- Streamlit dashboard
+- Automated test suite
+
+## Planned
+
+- Gemini AI qualitative review
+- Make automation
+- Google Sheets audit log
+- Slack notifications
+
+## Screenshots
+
+### Campaign Setup
+
+(Add screenshot)
+
+### Validation Results
+
+(Add screenshot)
+
+### PASS Example
+
+(Add screenshot)
+
+### FAIL Example
+
+(Add screenshot)
+
+## Demo Workflow
+
+```
+Campaign Setup
+      ↓
+Validate Campaign
+      ↓
+Governance Score
+      ↓
+Review Issues
+      ↓
+Launch Decision
+```
+
+1. **Campaign Setup** — Enter campaign details, tracking parameters,
+   launch details, and messaging into the Streamlit form.
+2. **Validate Campaign** — Submit the form to run the deterministic QA
+   engine against the campaign.
+3. **Governance Score** — Review the overall score, PASS/REVIEW/FAIL
+   status, and a category-by-category breakdown.
+4. **Review Issues** — Work through any critical issues and warnings,
+   each with a specific recommendation.
+5. **Launch Decision** — Once the campaign reaches a PASS status (or
+   flagged issues have been resolved), proceed with launch.
 
 ## Business Problem
 
@@ -37,18 +95,17 @@ resulting in lost data, incorrect reporting, and wasted ad spend.
 - Create an auditable record of campaign QA checks over time
 - Integrate QA checks into existing marketing operations workflows
 
-## Planned Architecture
+## Architecture
 
-The application is planned to evolve through the following components:
+The application is composed of the following components:
 
 - A **rule-based QA engine** that validates campaign data against defined
   governance rules (naming conventions, required fields, UTM structure,
   URL validity) and produces a deterministic 0–100 score and PASS/REVIEW/
   FAIL status — **implemented** (`src/validators.py`, `src/scoring.py`)
-- A **Streamlit application** providing a user interface for submitting and
-  reviewing campaign QA results — **under active development** (`app.py`,
-  `src/ui_helpers.py`); not yet manually verified, so not yet considered
-  complete
+- A **Streamlit application** providing a user interface for submitting
+  and reviewing campaign QA results — **implemented** (`app.py`,
+  `src/ui_helpers.py`)
 - **Gemini AI-assisted analysis** for more nuanced review beyond static
   rules (e.g., naming consistency, contextual anomalies) — planned, not
   yet built
@@ -80,8 +137,9 @@ develops.
 
 ## Development Phases
 
-This project will be built incrementally. See [docs/roadmap.md](docs/roadmap.md)
-for the full phased roadmap, summarized below:
+This project is being built incrementally. See
+[docs/roadmap.md](docs/roadmap.md) for the full phased roadmap, summarized
+below:
 
 1. Repository bootstrap
 2. Rule-based QA engine
@@ -96,10 +154,8 @@ for the full phased roadmap, summarized below:
 
 ## Installation
 
-> A Streamlit UI exists and is under active Sprint 2 development, but it
-> has not yet been manually verified in a browser — treat it as
-> unfinished. These steps prepare a local environment for development and
-> let you run the deterministic QA engine's test suite.
+Follow these steps to set up a local development environment, run the
+automated test suite, and launch the Streamlit dashboard.
 
 1. Clone the repository:
 
@@ -134,11 +190,17 @@ for the full phased roadmap, summarized below:
    pytest
    ```
 
+6. Run the application:
+
+   ```bash
+   python -m streamlit run app.py
+   ```
+
 ## Future Roadmap
 
-Planned future work includes the Streamlit interface, Gemini-powered
-analysis, and integrations with Make, Google Sheets, and Slack. Full
-details are tracked in [docs/roadmap.md](docs/roadmap.md).
+Planned future work includes Gemini-powered qualitative analysis and
+integrations with Make, Google Sheets, and Slack. Full details are
+tracked in [docs/roadmap.md](docs/roadmap.md).
 
 ## License
 
