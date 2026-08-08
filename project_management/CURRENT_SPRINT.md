@@ -17,19 +17,26 @@ deterministic engine or Gemini's behaviour.
 
 ## Current Status
 
-In progress — implementation complete and the full automated suite
-passes; live verification against a real Make scenario (with a real
-`MAKE_WEBHOOK_URL` configured) by a human is still required before this
-sprint can be marked done.
+Completed
 
 ## Tasks To Complete
 
-- Manual live verification — configure a real Make scenario and
-  `MAKE_WEBHOOK_URL`, submit a campaign, and confirm Make actually
-  receives the `campaign.qa.completed` payload with the expected shape
-  (see Next Session Starting Point for the exact steps)
+*None — Sprint 4 is complete.*
 
 ## Completed Tasks
+
+- **Live Make verification (human-performed, 2026-08-08):**
+  `MAKE_WEBHOOK_URL` configured locally in `.env`; a Make Custom Webhook
+  scenario was created and run in "Run once" mode; the Streamlit app was
+  started and the "Clean Paid Search" example was submitted; deterministic
+  QA returned 100/PASS, Gemini's qualitative review completed, and the
+  UI showed the "Sent to Make" caption. Make's execution history recorded
+  1 live operation with a payload containing `event` =
+  `campaign.qa.completed`, `event_id`, `sent_at`, `campaign`, `qa_result`
+  (including `category_breakdown`), and `ai_review` (`summary`,
+  `concerns` array, `recommendation`). No API key or secret appeared in
+  the payload. End-to-end delivery confirmed working against a real
+  Make scenario, not just the fake-client test suite.
 
 - Domain models — `src/models.py`: added `WebhookDeliveryStatus`
   (SENT/NOT_CONFIGURED/ERROR) and `WebhookDeliveryResult`. Named
@@ -82,7 +89,7 @@ sprint can be marked done.
   webhook call occurs without a configured `MAKE_WEBHOOK_URL`, so this
   is safe to run in this environment)
 - Documentation — added Decision 005 to `DECISIONS.md`; updated this
-  document; updated `README.md` to note Make integration is in progress
+  document; updated `README.md` to note Make integration is implemented
 
 ## Technical Notes
 
@@ -100,17 +107,16 @@ sprint can be marked done.
   precise ~11-second worst-case latency (5s timeout + 1s retry delay +
   5s timeout — documented accurately, not rounded down), and the
   exception-vs-HTTP-status logging distinction.
-- No `.env` file exists in this development environment, so
-  `MAKE_WEBHOOK_URL` is unset locally — the Streamlit smoke test exercises
-  the `NOT_CONFIGURED` path only (silent, no UI output), until a real
-  webhook URL is supplied.
+- A local `.env` with a real `MAKE_WEBHOOK_URL` was configured for live
+  verification (2026-08-08). The automated smoke test earlier in this
+  sprint ran before that, against the `NOT_CONFIGURED` path only — both
+  states have now been exercised, one by the automated suite/smoke test
+  and one by human live verification.
 
 ## Known Issues
 
-*None identified in automated testing. The `SENT`/retry paths have only
-been exercised against a fake client in tests — delivery to a real Make
-scenario has not yet been verified. Record any issues found during live
-testing here.*
+*None. Live verification against a real Make scenario succeeded with no
+issues found — see the live-verification entry under Completed Tasks.*
 
 ## Blockers
 
@@ -118,22 +124,11 @@ testing here.*
 
 ## Next Session Starting Point
 
-1. Create a Make scenario with a "Custom webhook" trigger module; copy
-   its webhook URL.
-2. Add `MAKE_WEBHOOK_URL=<that URL>` to a local `.env` file (copy from
-   `.env.example` if no `.env` exists yet).
-3. Run `python -m streamlit run app.py`, submit a real campaign, and
-   confirm: a "Sending to Make..." spinner appears, a "Sent to Make"
-   caption appears afterward, and the Make scenario's execution history
-   shows a received `campaign.qa.completed` payload matching the shape
-   documented in Decision 005.
-4. Optionally test the failure path (e.g. temporarily point
-   `MAKE_WEBHOOK_URL` at an invalid host) and confirm the calm "Could not
-   deliver to Make — QA result above is unaffected." caption appears,
-   with the QA result and AI review sections completely unaffected.
-5. Once verified, update this document's Current Status to "Completed"
-   and add a Sprint Retrospective (see Sprint 1's entry for the expected
-   format).
+Sprint 4 is complete. Sprint 5 has not yet been scoped — per the
+roadmap, Google Sheets audit logging and Slack notifications remain the
+next planned integrations, but which comes first, and its exact goal and
+task list, is a planning decision for the next session, not assumed
+here.
 
 ## Definition of Done
 
@@ -152,5 +147,59 @@ testing here.*
 - [x] No test makes a real network request; all 162 tests pass
 - [x] `src/validators.py`, `src/scoring.py`, `src/constants.py`, and
       `src/gemini_analyzer.py` are unmodified
-- [ ] **A human has manually verified delivery against a real Make
-      scenario** — pending, blocks marking this sprint complete
+- [x] **A human has manually verified delivery against a real Make
+      scenario** — confirmed 2026-08-08; 1 live operation received with
+      the expected payload shape and no secrets present
+
+## Sprint Retrospective
+
+### What Was Achieved
+
+Sprint 4 added Make webhook delivery as a third, side-effect-only stage
+after the deterministic QA engine and Gemini's qualitative review, with
+the same failure-isolation guarantees already established for Gemini in
+Decision 004: the webhook cannot change a score, a status, or hide
+either upstream result, and every outcome (sent, unconfigured, or
+error-after-retries) resolves to a typed `WebhookDeliveryResult` rather
+than an exception. The payload contract (`campaign.qa.completed`, a
+stable `event_id`/`sent_at` reused across retries, an explicit
+field allowlist excluding `budget`/`campaign_message`/secrets/raw
+prompt text) was locked in Decision 005 before implementation, then
+verified end-to-end against a real Make scenario — not just the 24-test
+fake-client suite.
+
+### Lessons Learned
+
+- Generating `event_id`/`sent_at` once per logical call (not per HTTP
+  attempt) was worth locking in as an explicit architectural decision
+  before writing any retry code — it would have been an easy, subtle
+  mistake to generate a fresh ID per attempt, which would have silently
+  broken the exact idempotency/audit-tracing property the field exists
+  to provide.
+- Distinguishing `logger.exception(...)` (real caught exceptions) from
+  `logger.warning`/`logger.error` (HTTP status-code failures that are
+  not exceptions) was a small but genuine correctness issue worth
+  getting right — fabricating a traceback for a normal HTTP 4xx/5xx
+  response would have made logs actively misleading during real
+  incident debugging.
+- Live verification caught nothing the fake-client test suite had
+  missed, which is itself a useful signal: the dependency-injection
+  pattern used consistently since Gemini (Decision 004) — a fake client
+  matching the real client's exact call shape — continues to be a
+  reliable substitute for the real integration, not just a convenient
+  test double.
+
+### Preparation for Sprint 5
+
+The QA pipeline through Sprint 4 is: `CampaignSubmission` →
+`validate_campaign()`/`score_campaign()` (deterministic, authoritative)
+→ `analyze_campaign()` (Gemini, advisory) → `send_to_make()` (webhook,
+side effect). Any future Google Sheets or Slack integration can follow
+the exact same shape established twice now (Decisions 004 and 005):
+read already-computed results without mutating them, never raise, return
+a typed result object, and isolate failures behind at least the same
+two independent layers (session-state-before-call, plus a defensive
+`try/except` in `app.py`). `WebhookDeliveryResult`/`WebhookDeliveryStatus`
+were deliberately named generically rather than Make-specific, so a
+future Slack notification can likely reuse them as-is rather than
+introducing a near-duplicate type.

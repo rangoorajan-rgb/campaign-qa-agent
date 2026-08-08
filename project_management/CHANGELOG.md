@@ -4,6 +4,62 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-08-08
+
+### Summary
+
+Make webhook integration, verified end-to-end against a live Make
+scenario.
+
+### Added
+
+- Webhook delivery module (`src/webhook.py`): `send_to_make(qa_result,
+  gemini_review_result, *, client=None, now=None) ->
+  WebhookDeliveryResult`, sending a `campaign.qa.completed` event to a
+  configured Make scenario as a side effect after the deterministic QA
+  engine and Gemini review have both already completed
+- Domain models (`src/models.py`): `WebhookDeliveryStatus`
+  (SENT/NOT_CONFIGURED/ERROR) and `WebhookDeliveryResult`, named
+  generically so a future Slack integration can reuse them
+- Retry logic: up to `MAKE_WEBHOOK_MAX_ATTEMPTS` attempts (default 2),
+  retrying only on connection errors, timeouts, and HTTP 5xx — never on
+  HTTP 4xx
+- A stable `event_id` (UUID4) and `sent_at` (UTC ISO 8601) generated
+  once per delivery and reused across retries, for future idempotency
+  and audit tracing
+- Configuration: `MAKE_WEBHOOK_URL`, `MAKE_WEBHOOK_TIMEOUT_SECONDS`
+  (default 5), `MAKE_WEBHOOK_MAX_ATTEMPTS` (default 2)
+- Streamlit integration: automatic delivery after every successful QA
+  submission, with a "Sending to Make..." spinner and a minimal
+  status caption ("Sent to Make" / a calm failure message); no UI output
+  at all when the webhook is unconfigured
+- Tests (`tests/test_webhook.py`, 24 tests): payload shape and exclusion
+  assertions, retry behaviour, event-identity stability across retries,
+  and non-mutation of both the deterministic and AI review results — all
+  using an injected fake HTTP client, no real network calls
+
+### Changed
+
+- `README.md` updated: Gemini qualitative review and Make webhook
+  automation both now listed as implemented, not planned
+
+### Testing
+
+- 162 passing tests (138 prior + 24 new for the webhook module)
+- Live-verified against a real Make scenario: 1 operation received with
+  the expected `campaign.qa.completed` payload shape and no secrets
+  present in the payload
+
+### Notes
+
+The Streamlit dashboard (Sprint 2) and the Gemini qualitative review
+(Sprint 3) were also completed prior to this release but were not given
+their own changelog entries at the time; see
+[project_management/DECISIONS.md](DECISIONS.md) (Decisions 004 and 005)
+and `CURRENT_SPRINT.md`'s sprint history for their implementation
+details. Google Sheets logging and Slack notifications remain planned,
+not yet built.
+
 ## [0.2.0] - 2026-08-07
 
 ### Summary
