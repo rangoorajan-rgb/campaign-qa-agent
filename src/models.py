@@ -175,3 +175,67 @@ class QAResult:
             for result in self.validation_results
             if result.status == ValidationStatus.FAIL
         ]
+
+
+class GeminiReviewStatus(str, Enum):
+    """Outcome of an attempted Gemini qualitative review.
+
+    Distinguishing NOT_CONFIGURED from ERROR lets the UI show an
+    appropriately calm message either way: an unconfigured API key is an
+    expected local-dev state, not a failure worth alarming a user about.
+    """
+
+    OK = "OK"
+    NOT_CONFIGURED = "NOT_CONFIGURED"
+    ERROR = "ERROR"
+
+
+class GeminiConcernSeverity(str, Enum):
+    """Gemini's own qualitative severity scale for a single concern.
+
+    Deliberately distinct from ValidationSeverity: these are Gemini's
+    subjective judgments, not deterministic rule outcomes, and must never
+    be visually or semantically conflated with CRITICAL/WARNING/INFO.
+    """
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+@dataclass
+class GeminiConcern:
+    """One qualitative concern raised by the Gemini review."""
+
+    title: str
+    explanation: str
+    severity: GeminiConcernSeverity
+
+
+@dataclass
+class GeminiReview:
+    """The qualitative review content Gemini returned.
+
+    Deliberately has no score and no PASS/REVIEW/FAIL-shaped field —
+    Gemini is advisory only; the deterministic QAResult remains the sole
+    source of the governance verdict.
+    """
+
+    summary: str
+    concerns: list[GeminiConcern]
+    strengths: list[str]
+    recommendation: str
+
+
+@dataclass
+class GeminiReviewResult:
+    """Outcome of calling src.gemini_analyzer.analyze_campaign().
+
+    Always a valid, fully-formed object regardless of what happened
+    internally (success, missing config, or an API/parsing failure) so
+    callers never need to catch exceptions from a Gemini call themselves.
+    """
+
+    status: GeminiReviewStatus
+    review: GeminiReview | None = None
+    error_message: str | None = None

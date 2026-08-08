@@ -479,3 +479,129 @@ amendment removes from the data model.
 Accepted
 
 ---
+
+## Decision 004
+
+### Decision ID
+
+004
+
+### Date
+
+2026-08-08
+
+### Context
+
+Sprint 3 adds Gemini as a second-stage reviewer that runs after the
+deterministic QA engine (Sprint 1/2, Decisions 002/003). This is the
+first point where an external, non-deterministic AI service enters a
+pipeline that has, until now, been fully deterministic, fully offline,
+and fully unit-testable without network access. The integration needed
+explicit boundaries before implementation to guarantee it could never
+compromise the properties Decisions 002/003 established.
+
+### Decision
+
+**Gemini is advisory only; deterministic QA remains authoritative.**
+`src/gemini_analyzer.py::analyze_campaign(campaign, qa_result, *,
+client=None)` is a pure consumer of an already-computed `QAResult` — it
+never re-validates, never re-scores, never produces a numeric score, and
+never produces a PASS/REVIEW/FAIL-shaped value. Its return type,
+`GeminiReviewResult`, has no field that could be mistaken for a
+governance verdict. The prompt sent to Gemini explicitly states the
+deterministic result is context only and explicitly instructs Gemini not
+to produce a score or a PASS/REVIEW/FAIL verdict.
+
+**Gemini failures never affect the deterministic result.**
+`analyze_campaign()` is contracted to never raise — a client-call
+failure, a network error, or a malformed/unparseable structured response
+all resolve to `GeminiReviewResult(status=ERROR, error_message=<safe
+message>)`, never an exception. In `app.py`, the deterministic
+`QAResult` is written to `st.session_state` *before* `analyze_campaign()`
+is ever called, and the call itself is additionally wrapped in a
+defensive `try/except` even though the contract says it won't raise.
+Two independent layers must both fail for a Gemini problem to reach the
+user as anything other than the calm "AI review is temporarily
+unavailable" message.
+
+**Structured output, not prose parsing.** The Gemini call uses
+`google-genai`'s `response_mime_type="application/json"` +
+`response_schema` (an explicit JSON-schema dict in
+`gemini_analyzer.py::_RESPONSE_SCHEMA`, not the SDK's automatic
+Python-type-to-schema conversion) so the expected response shape is
+visible in one place and the parsing logic
+(`gemini_analyzer.py::_parse_review`) is a small, independently testable
+function rather than a prompt-engineering guess at prose extraction.
+
+**`gemini-2.5-flash` is the configurable default model**, loaded as
+`config.GEMINI_MODEL` (env var `GEMINI_MODEL`, defaulting to
+`gemini-2.5-flash` if unset) and read from `config` at call time rather
+than being a literal anywhere else in the codebase — changing models
+requires no code change.
+
+**Trigger: automatic, immediately after `score_campaign()` succeeds** —
+not a separate "Run AI Review" button. The user submits the campaign
+once; the flow is Campaign Form → Deterministic QA → QA Score/Status →
+Gemini review → combined results, shown via a `st.spinner("Running AI
+review...")` while the call is in flight. Because the call only happens
+inside the same `if submitted:` branch that already computes `qa_result`
+(see `app.py::main()`), a Streamlit rerun that isn't a new form
+submission (e.g. expanding an unrelated expander) never re-triggers a
+Gemini call — this was achieved by placement alone, with no caching
+layer.
+
+**No new domain concepts were introduced beyond what Decisions 002/003
+already define.** `GeminiConcernSeverity` (LOW/MEDIUM/HIGH) is
+deliberately a separate enum from `ValidationSeverity`
+(INFO/WARNING/CRITICAL) so a qualitative AI judgment can never be
+visually or semantically conflated with a deterministic rule outcome —
+the UI does not reuse `STATUS_META`'s PASS/REVIEW/FAIL colour styling
+anywhere in the AI review section.
+
+### Alternatives Considered
+
+- Letting Gemini also emit a score or verdict as a "second opinion" to
+  compare against the deterministic one — rejected: the task scope
+  requires the deterministic engine to remain the sole authority, and
+  two competing scores would confuse, not help, a marketer.
+- Relying on prose output and extracting structured data with regex —
+  rejected in favour of the SDK's native structured-output support,
+  which is both more reliable and directly requested by the approved
+  architecture.
+- A manual "Run AI Review" button instead of automatic triggering —
+  considered for cost/latency control, but the approved architecture
+  specifies a single-submission flow; noted here in case usage patterns
+  later warrant revisiting it.
+- A dedicated caching layer keyed by campaign content hash — rejected as
+  unnecessary: placing the Gemini call inside the same
+  submission-triggered branch as the deterministic score already
+  prevents redundant calls on unrelated reruns, per Sprint 3's "do not
+  build complex caching infrastructure" instruction.
+
+### Reasoning
+
+Every boundary above exists to protect the same invariant: a marketer
+must always be able to trust the deterministic score and status exactly
+as much after this integration as before it. Making Gemini's types,
+prompt, and failure modes structurally incapable of producing a
+verdict-shaped output — rather than just instructing it not to and
+trusting compliance — means the guarantee holds even if Gemini
+occasionally misbehaves or the prompt is refined later.
+
+### Consequences
+
+Any future consumer of `GeminiReviewResult` (a future Slack notification
+or Google Sheets log, for instance) inherits the same non-authoritative
+framing for free — there is no score or verdict field to accidentally
+surface as if it were one. If a future sprint wants Gemini's qualitative
+input to actually influence launch decisions (not just inform them),
+that would be a new, explicit decision, not an incremental change to
+this one. Test coverage for `analyze_campaign()` uses an injected fake
+client exclusively (`tests/test_gemini_analyzer.py`); no test in the
+suite makes a real network call or requires `GEMINI_API_KEY` to be set.
+
+### Status
+
+Accepted
+
+---

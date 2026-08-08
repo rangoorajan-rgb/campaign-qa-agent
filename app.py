@@ -15,7 +15,15 @@ from datetime import date, timedelta
 import streamlit as st
 
 from config import APP_TITLE, LAYOUT, PAGE_ICON, SIDEBAR_STATE
-from src.models import CampaignSubmission, QAResult, QAStatus, ValidationResult
+from src.gemini_analyzer import analyze_campaign
+from src.models import (
+    CampaignSubmission,
+    GeminiReviewResult,
+    GeminiReviewStatus,
+    QAResult,
+    QAStatus,
+    ValidationResult,
+)
 from src.scoring import score_campaign
 from src.ui_helpers import (
     CATEGORY_LABELS,
@@ -519,6 +527,59 @@ def render_results(qa_result: QAResult) -> None:
     _render_result_group("Not Applicable", qa_result.not_applicable_checks)
 
 
+def render_ai_review(review_result: GeminiReviewResult) -> None:
+    """Render Gemini's supplementary qualitative review.
+
+    Purely additive to render_results(): never reads or displays a score
+    or a PASS/REVIEW/FAIL-shaped value, and never reuses the deterministic
+    status colour styling — this section must always read as advisory,
+    not as a second verdict.
+    """
+    _section_title("6. AI Review")
+    st.caption(
+        "Qualitative AI review — supplementary and does not affect the "
+        "governance score or status above."
+    )
+
+    if review_result.status == GeminiReviewStatus.NOT_CONFIGURED:
+        st.info(
+            "AI review is not configured. Add a Gemini API key to enable "
+            "qualitative review."
+        )
+        return
+
+    if review_result.status == GeminiReviewStatus.ERROR:
+        st.warning(
+            "AI review is temporarily unavailable. The deterministic QA "
+            "result above is unaffected."
+        )
+        return
+
+    review = review_result.review
+    if review is None:  # defensive; OK status always carries a review
+        return
+
+    st.markdown("**AI Summary**")
+    st.write(review.summary)
+
+    if review.concerns:
+        st.markdown("**Concerns**")
+        for concern in review.concerns:
+            with st.container(border=True):
+                st.markdown(
+                    f"**{concern.title}**  \n*Severity: {concern.severity.value}*"
+                )
+                st.write(concern.explanation)
+
+    if review.strengths:
+        with st.expander(f"Strengths ({len(review.strengths)})"):
+            for strength in review.strengths:
+                st.markdown(f"- {strength}")
+
+    st.markdown("**Recommendation**")
+    st.write(review.recommendation)
+
+
 def main() -> None:
     st.set_page_config(
         page_title=APP_TITLE,
@@ -544,10 +605,30 @@ def main() -> None:
                 "review your inputs and try again."
             )
         else:
+            # Deterministic result is stored first, before Gemini is ever
+            # called, so it is guaranteed to be available and displayed
+            # regardless of what happens with the AI review below.
             st.session_state["qa_result"] = qa_result
+
+            try:
+                with st.spinner("Running AI review..."):
+                    gemini_review_result = analyze_campaign(campaign, qa_result)
+            except Exception:
+                # analyze_campaign() is contracted to never raise; this is
+                # defense-in-depth only, so a bug there still can't take
+                # down the deterministic result above.
+                logger.exception("Unexpected failure while running AI review")
+                gemini_review_result = GeminiReviewResult(
+                    status=GeminiReviewStatus.ERROR,
+                    error_message="AI review is temporarily unavailable.",
+                )
+            st.session_state["gemini_review_result"] = gemini_review_result
 
     if "qa_result" in st.session_state:
         render_results(st.session_state["qa_result"])
+
+    if "gemini_review_result" in st.session_state:
+        render_ai_review(st.session_state["gemini_review_result"])
 
 
 if __name__ == "__main__":
