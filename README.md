@@ -9,9 +9,11 @@ rules, helping teams catch preventable errors before they reach production.
 
 This project is currently in early development. The deterministic
 rule-based QA engine — campaign validation and scoring — is implemented
-and covered by an automated test suite. The Streamlit interface, Gemini
-qualitative analysis, and the Make/Google Sheets/Slack integrations
-described below are still planned and not yet built.
+and covered by an automated test suite. A Streamlit submission interface
+is under active development (Sprint 2) on top of that engine; it has not
+yet been manually verified in a browser, so it should not be considered
+complete. Gemini qualitative analysis and the Make/Google Sheets/Slack
+integrations described below are still planned and not yet built.
 
 ## Business Problem
 
@@ -44,7 +46,9 @@ The application is planned to evolve through the following components:
   URL validity) and produces a deterministic 0–100 score and PASS/REVIEW/
   FAIL status — **implemented** (`src/validators.py`, `src/scoring.py`)
 - A **Streamlit application** providing a user interface for submitting and
-  reviewing campaign QA results — planned, not yet built
+  reviewing campaign QA results — **under active development** (`app.py`,
+  `src/ui_helpers.py`); not yet manually verified, so not yet considered
+  complete
 - **Gemini AI-assisted analysis** for more nuanced review beyond static
   rules (e.g., naming consistency, contextual anomalies) — planned, not
   yet built
@@ -92,9 +96,10 @@ for the full phased roadmap, summarized below:
 
 ## Installation
 
-> There is no user-facing application yet (no Streamlit UI). These steps
-> prepare a local environment for development and let you run the
-> deterministic QA engine's test suite.
+> A Streamlit UI exists and is under active Sprint 2 development, but it
+> has not yet been manually verified in a browser — treat it as
+> unfinished. These steps prepare a local environment for development and
+> let you run the deterministic QA engine's test suite.
 
 1. Clone the repository:
 
