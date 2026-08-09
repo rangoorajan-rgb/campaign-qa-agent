@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-08-09
+
+### Summary
+
+Slack notification integration, added as the final step of the existing
+Make automation, verified end-to-end live.
+
+### Added
+
+- Slack notification module inside the existing Make.com scenario
+  (external configuration, not repository code), triggered immediately
+  after a successful Google Sheets audit-log write
+- Notifications post to the `#campaign-qa` Slack channel containing
+  Campaign Name, Campaign Owner, Channel, QA Score, QA Status, Critical
+  Failure Count, Warning Count, AI Summary, and AI Recommendation —
+  sourced from the same `campaign.qa.completed` webhook payload already
+  used for Google Sheets logging (Decision 005), with no payload changes
+  required
+
+### Testing
+
+- Live end-to-end verification (human-performed): full workflow executed
+  — Streamlit → QA Engine → Gemini → Make Webhook → Google Sheets →
+  Slack — with the resulting message confirmed inside the TaskFlowAI
+  Slack workspace
+- Regression check: Google Sheets audit logging confirmed still
+  operational; all previously verified functionality (deterministic QA,
+  Gemini review, Make webhook delivery) continues working with no
+  regressions found
+- No automated test coverage exists for this capability, since it lives
+  entirely in external Make configuration rather than in `src/` — see
+  `project_management/CURRENT_SPRINT.md` (Sprint 6) for why this can
+  only be confirmed by live verification, not by `pytest`
+
+### Notes
+
+Google Sheets audit logging (also implemented via Make.com, downstream
+of the same webhook) was completed and live-verified prior to this
+release but was not given its own changelog entry at the time; see
+`README.md`'s Architecture section and
+`project_management/FUTURE_PRODUCT_ROADMAP.md` for its implementation
+details. With this release, the originally scoped integration roadmap
+(Streamlit, Gemini, Make, Google Sheets, Slack) is complete end-to-end.
+Future product direction beyond this MVP is tracked separately in
+`project_management/FUTURE_PRODUCT_ROADMAP.md`.
+
 ## [0.3.0] - 2026-08-08
 
 ### Summary

@@ -23,12 +23,15 @@ consistent way to catch these issues before they reach production.
 - Streamlit dashboard
 - Gemini AI qualitative review
 - Make webhook automation
+- Google Sheets audit logging (via Make.com)
+- Slack notifications (via Make.com)
 - Automated test suite
 
 ## Planned
 
-- Google Sheets audit log
-- Slack notifications
+*None currently in progress. See
+[project_management/FUTURE_PRODUCT_ROADMAP.md](project_management/FUTURE_PRODUCT_ROADMAP.md)
+for possible future product directions.*
 
 ## Screenshots
 
@@ -116,9 +119,23 @@ The application is composed of the following components:
   as a side effect after QA and Gemini both complete; verified end-to-end
   against a live Make scenario
 - **Google Sheets logging** to maintain a persistent, shareable audit trail
-  of QA results — planned, not yet built
+  of QA results — **implemented via Make.com** (a "Google Sheets — Add a
+  Row" module in the same Make scenario the webhook triggers, not
+  repository Python code); each row records campaign name, campaign
+  type, channel, score, status, critical-failure count, warning count,
+  campaign owner, AI status, AI summary, and recommendation
 - **Slack notifications** to alert stakeholders of QA results and launch
-  blockers — planned, not yet built
+  blockers — **implemented via Make.com** as the final operational step,
+  triggered immediately after the Google Sheets row is written; posts to
+  the `#campaign-qa` channel with campaign name, campaign owner, channel,
+  QA score, QA status, critical-failure count, warning count, AI
+  summary, and AI recommendation. Verified end-to-end (Streamlit → QA
+  Engine → Gemini → Make Webhook → Google Sheets → Slack)
+
+Google Sheets logging and Slack notifications are both configured
+entirely within the external Make scenario, not in this repository's
+Python code — `src/webhook.py` only publishes the `campaign.qa.completed`
+event; everything downstream of that is Make automation.
 
 See [docs/architecture.md](docs/architecture.md) for further detail and
 [docs/roadmap.md](docs/roadmap.md) for the phased build plan.
@@ -202,9 +219,11 @@ automated test suite, and launch the Streamlit dashboard.
 
 ## Future Roadmap
 
-Planned future work is Google Sheets audit logging and Slack
-notifications. Full details are tracked in
-[docs/roadmap.md](docs/roadmap.md).
+The originally planned integration phases (Streamlit, Gemini, Make,
+Google Sheets, Slack — see [docs/roadmap.md](docs/roadmap.md)) are all
+complete. No further implementation is currently planned; longer-term
+product direction beyond this MVP is captured separately in
+[project_management/FUTURE_PRODUCT_ROADMAP.md](project_management/FUTURE_PRODUCT_ROADMAP.md).
 
 ## License
 

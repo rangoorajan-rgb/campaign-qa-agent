@@ -51,6 +51,19 @@ are covered by the automated test suite:
   successfully, and a real row was written containing campaign name,
   campaign type, channel, score, status, critical-failure count, warning
   count, campaign owner, AI status, AI summary, and recommendation.
+- **Slack notifications via Make.com** — implemented and manually
+  verified end-to-end; like Google Sheets logging, this integration
+  lives in the external Make scenario rather than in repository
+  application code. It is the final step of the same Make scenario,
+  triggered immediately after the Google Sheets row is written
+  successfully. The live workflow is Streamlit Campaign QA →
+  deterministic QA → Gemini qualitative review → Make custom webhook →
+  Google Sheets "Add a Row" → Slack notification. Verification confirmed
+  a message posted to the `#campaign-qa` channel (observed in the
+  TaskFlowAI workspace) containing campaign name, campaign owner,
+  channel, QA score, QA status, critical-failure count, warning count,
+  AI summary, and AI recommendation, with no regression to Google Sheets
+  logging or any earlier pipeline stage.
 - **Automated pytest suite** — 162 passing tests across models,
   validators, scoring, the sample dataset, Gemini (fake-client), and the
   webhook (fake-client), none of which make real network calls.
@@ -63,22 +76,23 @@ are covered by the automated test suite:
 ### A note on where this MVP actually lives
 
 Not all of the current MVP is Python application code. Google Sheets
-audit logging is implemented entirely as configuration inside an
-external Make.com scenario (the webhook trigger plus an "Add a Row"
-module mapped to the audit-log spreadsheet) — there is no Google Sheets
-integration in `src/`, and no Sheets-related dependency in
-`requirements.txt`. That is expected: `src/webhook.py` only publishes
-`campaign.qa.completed`; what Make does with that event afterward is
-external infrastructure, not repository code.
+audit logging and Slack notifications are both implemented entirely as
+configuration inside the same external Make.com scenario (webhook
+trigger → "Add a Row" module → Slack message module) — there is no
+Google Sheets or Slack integration in `src/`, and no related dependency
+in `requirements.txt`. That is expected: `src/webhook.py` only publishes
+`campaign.qa.completed`; what Make does with that event afterward,
+including chaining Slack after the Sheets write, is external
+infrastructure, not repository code.
 
 This means **inspecting `src/` alone is not sufficient to know the full
 current MVP.** Some capabilities are implemented and verified, but
-configured entirely outside this codebase. `docs/roadmap.md` (Phase 6)
-still describes Google Sheets logging as a planned *repository*
-integration and has not been updated to reflect that the same outcome
-already exists via Make — that document describes the originally
-planned build sequence, not the current external-automation state,
-and the two have diverged here.
+configured entirely outside this codebase. `docs/roadmap.md` (Phases 6
+and 7) still describes Google Sheets logging and Slack notifications as
+planned *repository* integrations and has not been updated to reflect
+that the same outcomes already exist via Make — that document describes
+the originally planned build sequence, not the current
+external-automation state, and the two have diverged here.
 
 ---
 
@@ -104,7 +118,6 @@ something the organisation acts on.
 
 Potential capabilities:
 
-- Slack notifications
 - Microsoft Teams notifications
 - Configurable notification rules
 - PASS / REVIEW / FAIL routing
